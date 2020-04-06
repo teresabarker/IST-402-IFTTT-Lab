@@ -1,0 +1,103 @@
+// IFTTT ButtonAccel Lab
+// Teresa Barker & Alexander Hirsh
+// IST 402-001
+// April 4, 2020
+
+#include <SPI.h>
+#include <WiFiNINA.h>
+#include "arduino_secrets.h"
+#include <Arduino_LSM6DS3.h>
+ 
+const int BUTTON_PIN = 2;
+ 
+char ssid[] = SECRET_SSID; //  your network SSID (name)
+char pass[] = SECRET_PSW;//  your network PASSWORD ()
+String apiKey = SECRET_APIKEY;
+ 
+int press_counter = 0;
+int status = WL_IDLE_STATUS;
+char server_name[] = "maker.ifttt.com";
+ 
+WiFiClient client;
+ 
+ 
+void setup() {
+  //Initialize serial and wait for port to open:
+  Serial.begin(9600);
+  // accelerometer code
+  while (!Serial);
+
+  if (!IMU.begin()) {
+    Serial.println("Failed to initialize IMU!");
+
+    while (1);
+  }
+ 
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+ 
+  // attempt to connect to Wifi network:
+  while (status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+ 
+    //use the line below if your network is protected by wpa password
+    status = WiFi.begin(ssid, pass);
+ 
+    // wait 5 seconds for connection:
+    delay(5000);
+    Serial.println(status);
+  }
+  Serial.println("Connected to wifi");
+}
+ 
+void loop() {
+  // checking if button is pressed
+  if(digitalRead(BUTTON_PIN)==LOW) {
+    press_counter++;
+    Serial.println("Button pressed!");
+    Serial.println("Reading accelerometer values...");
+    float x, y, z;
+  
+    if (IMU.accelerationAvailable()) {
+      IMU.readAcceleration(x, y, z);
+  
+      Serial.print(x);
+      Serial.print('\t');
+      Serial.print(y);
+      Serial.print('\t');
+      Serial.println(z);
+    }
+
+    String additional_info = "?value1=";
+    additional_info += x;
+    additional_info += "&value2=";
+    additional_info += y;
+    additional_info += "&value3=";
+    additional_info += z;
+
+    // calls function
+    sendIFTTT("button_pressed", additional_info);
+    //}
+  }
+}
+ 
+void sendIFTTT(String event_name, String parameters) {
+ 
+  Serial.println("Starting connection to server...");
+  // if you get a connection, report back via serial:
+  if (client.connect(server_name, 80)) {
+    Serial.println("Connected to server");
+    // Make a HTTP request:
+    client.print(String("GET ") + "/trigger/" + event_name + "/with/key/" + apiKey + parameters);
+    client.println(" HTTP/1.1");
+    client.println("Host: maker.ifttt.com");
+    client.println("Connection: close");
+    client.println(); //It is incredibly important to have the blank println statement after
+ 
+    delay(500);
+    client.flush();
+    client.stop();
+  } else {
+    Serial.println("unable to connect");
+  }
+}
